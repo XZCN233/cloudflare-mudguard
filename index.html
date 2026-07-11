@@ -1,0 +1,1076 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare 控制台</title>
+    <!-- 与左上角一致的 SVG 图标作为 favicon -->
+    <link rel="icon" href="favicon.ico">
+    <script src="data/tailwindcss.3.4.17.css"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; background: #fff; color: #000; overflow: hidden; }
+        
+        /* 侧边栏样式 */
+        .sidebar { width: 256px; border-right: 1px solid #e0e0e0; background: #f9f9f9; height: 100vh; flex-shrink: 0; display: flex; flex-direction: column; }
+        .sidebar-scroll { flex: 1; overflow-y: auto; padding-top: 8px; }
+        .nav-item { display: flex; align-items: center; padding: 7px 16px; font-size: 13.5px; color: #404040; cursor: pointer; transition: 0.1s; }
+        .nav-item:hover { background: #eee; }
+        .nav-item.active { background: #e2ebf6; color: #0051c3; font-weight: 600; border-right: 3px solid #0051c3; }
+        .nav-item svg { width: 18px; height: 18px; min-width: 18px; margin-right: 12px; stroke-width: 1.5; }
+        .sidebar-header { padding: 12px 16px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; font-size: 12px; background: #fff; cursor: pointer; }
+        .group-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; padding: 16px 16px 6px; letter-spacing: 0.5px; }
+        
+        /* 搜索框 */
+        .search-box { margin: 8px 12px; background: #eee; border-radius: 4px; display: flex; align-items: center; padding: 4px 10px; border: 1px solid transparent; }
+        .search-box:focus-within { background: #fff; border-color: #0051c3; box-shadow: 0 0 0 2px rgba(0,81,195,0.1); }
+
+        /* 用户二级菜单 */
+        #user-dropdown { display: none; position: absolute; top: 44px; right: 10px; width: 200px; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); z-index: 100; }
+        .dropdown-item { padding: 10px 16px; font-size: 13px; color: #333; cursor: pointer; display: flex; align-items: center; }
+        .dropdown-item:hover { background: #f5f5f5; }
+        .dropdown-item.danger { color: #d0021b; border-top: 1px solid #f0f0f0; }
+
+        .cf-table { width: 100%; border-collapse: collapse; }
+        .cf-table th { text-align: left; padding: 12px 8px; font-size: 12px; color: #666; font-weight: 500; border-bottom: 1px solid #e0e0e0; }
+        .cf-table td { padding: 14px 8px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+        .sparkline { width: 80px; height: 16px; stroke: #99bced; stroke-width: 1.5; fill: none; }
+
+        /* 模态框 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 200; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; border-radius: 8px; width: 500px; max-width: 90%; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { font-size: 18px; font-weight: 600; }
+        .close-modal { cursor: pointer; font-size: 24px; line-height: 1; color: #888; }
+
+        .badge-proxy { background: #f6821f; color: white; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 12px; text-transform: uppercase; }
+        .badge-dns { background: #e8e8e8; color: #444; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 12px; }
+        .badge-worker { background: #2c7cb0; color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; }
+
+        .proxy-toggle { display: flex; align-items: center; gap: 10px; }
+        .proxy-toggle span { font-size: 13px; }
+
+        /* 登录页面样式 */
+        .login-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            flex-shrink: 0;
+        }
+        .login-header img { height: 32px; }
+        .login-header-btn {
+            padding: 6px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            color: #333;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .login-scroll-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 0;
+        }
+        .login-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        .login-container h1 {
+            text-align: center;
+            font-size: 26px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            margin-top: 0;
+        }
+        .sso-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 24px;
+            max-height: 40vh; 
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+        .sso-list::-webkit-scrollbar { width: 6px; }
+        .sso-list::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 3px; }
+        .sso-btn {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: default;
+            transition: background 0.2s;
+            color: #333;
+            opacity: 0.8;
+        }
+        .sso-btn:hover { background: #f9f9f9; }
+        .sso-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .sso-icon img { width: 100%; height: 100%; object-fit: contain; }
+        .sso-btn span.text { flex: 1; text-align: center; }
+        .login-divider {
+            border-top: 1px solid #eaeaea;
+            margin: 24px 0;
+        }
+        .login-form-group { margin-bottom: 16px; }
+        .login-form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .login-form-group input {
+            width: 100%; padding: 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px; box-sizing: border-box;
+            font-size: 14px; outline: none;
+        }
+        .login-form-group input:focus { border-color: #0051c3; }
+        .login-password-input { position: relative; }
+        .login-password-input input { padding-right: 40px; }
+        .login-eye-icon {
+            position: absolute; right: 12px; top: 50%;
+            transform: translateY(-50%); cursor: pointer; color: #666;
+        }
+        .login-captcha-section { margin-bottom: 24px; }
+        .login-captcha-label { font-size: 13px; color: #666; margin-bottom: 8px; }
+        .login-captcha-box {
+            border: 1px solid #e2e2e2; background: #fafafa;
+            border-radius: 3px; padding: 12px 16px;
+            display: flex; justify-content: space-between; align-items: center;
+            cursor: pointer;
+        }
+        .login-captcha-left { 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            font-size: 14px; 
+            color: #333; 
+        }
+        .login-spinner-8dots {
+            position: relative;
+            width: 24px; 
+            height: 24px;
+            animation: spin-rotate 2s linear infinite;
+        }
+        .login-spinner-8dots div {
+            position: absolute;
+            width: 5px; 
+            height: 5px;
+            background-color: #228b22;
+            border-radius: 50%;
+            left: 50%; 
+            top: 0;
+            margin-left: -2.5px;
+            transform-origin: 2.5px 12px;
+        }
+        .login-spinner-8dots div:nth-child(1) { transform: rotate(0deg); opacity: 1; }
+        .login-spinner-8dots div:nth-child(2) { transform: rotate(45deg); opacity: 0.9; }
+        .login-spinner-8dots div:nth-child(3) { transform: rotate(90deg); opacity: 0.8; }
+        .login-spinner-8dots div:nth-child(4) { transform: rotate(135deg); opacity: 0.7; }
+        .login-spinner-8dots div:nth-child(5) { transform: rotate(180deg); opacity: 0.6; }
+        .login-spinner-8dots div:nth-child(6) { transform: rotate(225deg); opacity: 0.5; }
+        .login-spinner-8dots div:nth-child(7) { transform: rotate(270deg); opacity: 0.4; }
+        .login-spinner-8dots div:nth-child(8) { transform: rotate(315deg); opacity: 0.3; }
+        @keyframes spin-rotate { 100% { transform: rotate(360deg); } }
+        .login-captcha-square {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #228b22;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .login-checkmark {
+            width: 18px;
+            height: 10px;
+            border-left: 4px solid #228b22;
+            border-bottom: 4px solid #228b22;
+            transform: rotate(-45deg);
+            position: relative;
+            top: -2px;
+        }
+        .login-captcha-passed { color: #228b22; font-weight: 600; }
+        .login-captcha-right { text-align: right; }
+        .login-captcha-right img { height: 20px; display: block; margin: 0 auto 2px auto; }
+        .login-captcha-links { font-size: 10px; color: #555; }
+        .login-captcha-links a { color: #555; text-decoration: none; }
+        .login-captcha-links a:hover { text-decoration: underline; }
+        .login-terms {
+            font-size: 12px; color: #666; margin-bottom: 16px; line-height: 1.5;
+        }
+        .login-terms a { color: #666; text-decoration: underline; }
+        .login-submit-btn {
+            width: 100%; padding: 12px; background-color: #cce0ff;
+            color: #fff; border: none; border-radius: 4px;
+            font-size: 15px; font-weight: 600; cursor: not-allowed; margin-bottom: 24px;
+            transition: background-color 0.2s;
+        }
+        .login-submit-btn.enabled {
+            background-color: #0051c3;
+            cursor: pointer;
+        }
+        .login-footer-links {
+            text-align: center; font-size: 13px; color: #555;
+            display: flex; flex-direction: column; gap: 12px; padding-bottom: 30px;
+        }
+        .login-footer-links a { color: #333; text-decoration: none; font-weight: 500; }
+        .login-footer-links a:hover { text-decoration: underline; }
+
+        /* 视图切换 */
+        #login-view, #console-view {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #console-view {
+            display: none;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录视图 -->
+    <div id="login-view">
+        <header class="login-header">
+            <img src="data/cloudflare.png" alt="Cloudflare">
+            <a href="https://dash.cloudflare.com/sign-up" class="login-header-btn">注册</a>
+        </header>
+
+        <div class="login-scroll-container">
+            <main class="login-container">
+                <h1>登录到 Cloudflare</h1>
+
+                <div class="sso-list">
+                    <!-- 第三方登录按钮（仅装饰） -->
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/google.png" width="40" height="40" alt=""></span><span class="text">使用 Google 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/apple.png" width="20" height="20" alt=""></span><span class="text">使用 Apple 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/github.png" width="20" height="20" alt=""></span><span class="text">使用 GitHub 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/zlb.png" width="20" height="20" alt=""></span><span class="text">使用 浙里办 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/ykb.png" width="20" height="20" alt=""></span><span class="text">使用 渝快办 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/yss.png" width="20" height="20" alt=""></span><span class="text">使用 粤省事 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/wechat.png" width="20" height="20" alt=""></span><span class="text">使用 微信 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/line.png" width="20" height="20" alt=""></span><span class="text">使用 连我 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/whatsapp.png" width="20" height="20" alt=""></span><span class="text">使用 WhatsApp 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/qq.png" width="20" height="20" alt=""></span><span class="text">使用 腾讯QQ 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/taobao.png" width="20" height="20" alt=""></span><span class="text">使用 淘宝 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/eleme.png" width="20" height="20" alt=""></span><span class="text">使用 淘宝闪购 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/meituanwm.png" width="20" height="20" alt=""></span><span class="text">使用 美团外卖 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/jd.png" width="20" height="20" alt=""></span><span class="text">使用 京东闪送 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/youtube.png" width="20" height="20" alt=""></span><span class="text">使用 YouTube 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/tiktok.png" width="20" height="20" alt=""></span><span class="text">使用 TikTok 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/bilibili.png" width="20" height="20" alt=""></span><span class="text">使用 哔哩哔哩 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/pixiv.png" width="20" height="20" alt=""></span><span class="text">使用 Pixiv 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/xiaomi.png" width="20" height="20" alt=""></span><span class="text">使用 小米账号 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/bytedance.png" width="20" height="20" alt=""></span><span class="text">使用 字节跳动 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/baidu.png" width="20" height="20" alt=""></span><span class="text">使用 百度账号 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/netease.png" width="20" height="20" alt=""></span><span class="text">使用 网易邮箱 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/sina.png" width="20" height="20" alt=""></span><span class="text">使用 新浪微博 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/whdt.png" width="20" height="20" alt=""></span><span class="text">使用 武汉地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/hzdt.png" width="20" height="20" alt=""></span><span class="text">使用 杭州地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/hzmtr.png" width="20" height="20" alt=""></span><span class="text">使用 杭港地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/shst.png" width="20" height="20" alt=""></span><span class="text">使用 上海申通 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/shsmt.png" width="20" height="20" alt=""></span><span class="text">使用 上海磁浮 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/mtr.png" width="20" height="20" alt=""></span><span class="text">使用 港铁 MTR 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/gzdt.png" width="20" height="20" alt=""></span><span class="text">使用 广州地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/njdt.png" width="20" height="20" alt=""></span><span class="text">使用 南京地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/fzdt.png" width="20" height="20" alt=""></span><span class="text">使用 福州地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/csdt.png" width="20" height="20" alt=""></span><span class="text">使用 长沙地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/qddt.png" width="20" height="20" alt=""></span><span class="text">使用 青岛地铁 继续</span></button>
+                    <button class="sso-btn" onclick="return false;"><span class="sso-icon"><img src="sso-icon/nycmta.png" width="20" height="20" alt=""></span><span class="text">使用 纽约 MTA 继续</span></button>
+                </div>
+
+                <div class="login-divider"></div>
+
+                <form id="loginForm" onsubmit="return false;">
+                    <div class="login-form-group">
+                        <label>API 令牌</label>
+                        <div class="login-password-input">
+                            <input type="password" id="apiToken" placeholder="请输入您的 Cloudflare API 令牌" autocomplete="off">
+                            <svg class="login-eye-icon" id="toggleTokenEye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="login-captcha-section">
+                        <div class="login-captcha-label">告诉我们您是人类</div>
+                        <div class="login-captcha-box" id="captchaBox">
+                            <div class="login-captcha-left">
+                                <div class="login-spinner-8dots" id="spinner">
+                                    <div></div><div></div><div></div><div></div>
+                                    <div></div><div></div><div></div><div></div>
+                                </div>
+                                <span id="captchaText">正在验证...</span>
+                            </div>
+                            <div class="login-captcha-right">
+                                <img src="data/cloudflare.png" alt="Cloudflare">
+                                <div class="login-captcha-links">
+                                    <a href="https://www.cloudflare.com/zh-cn/privacypolicy/">隐私</a> · <a href="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/help">帮助</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="login-terms">
+                        继续操作即表示我同意 Cloudflare 的<a href="https://www.cloudflare.com/subscriptionagreement/">条款</a>、<a href="https://www.cloudflare.com/privacypolicy/">隐私政策</a>和 <a href="https://www.cloudflare.com/cookie-policy/">Cookie 政策</a>。
+                    </div>
+
+                    <button type="button" class="login-submit-btn" id="loginBtn" disabled>登录</button>
+                </form>
+
+                <div class="login-footer-links">
+                    <div>还没有帐户？ <a href="https://dash.cloudflare.com/sign-up">注册</a></div>
+                    <div>忘记了你的 <a href="https://dash.cloudflare.com/forgot-email">电子邮件</a> 或者 <a href="https://dash.cloudflare.com/forgot-password">密码</a>？</div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 控制台视图 -->
+    <div id="console-view" class="hidden">
+        <header class="h-12 border-b border-gray-200 flex items-center justify-between px-4 bg-white sticky top-0 z-50">
+            <div class="flex items-center">
+                <div class="text-[#f38020] w-8 h-8 mr-4">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727"/></svg>
+                </div>
+                <div class="h-6 w-px bg-gray-200 mx-1"></div>
+                <span id="header-token-mask" class="text-gray-500 text-xs px-3">验证中...</span>
+            </div>
+            <div class="flex items-center space-x-5 text-gray-500 text-sm">
+                <span class="flex items-center cursor-default hover:text-gray-800"><span class="mr-1 text-lg font-light">+</span> 添加</span>
+                <span class="flex items-center cursor-default hover:text-gray-800">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2"/></svg>
+                    支持
+                </span>
+                <div class="relative">
+                    <div id="user-btn" class="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center cursor-pointer border hover:border-gray-300">
+                        <svg class="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/></svg>
+                    </div>
+                    <div id="user-dropdown">
+                        <div class="px-4 py-3 border-b bg-gray-50 rounded-t">
+                            <p class="text-[11px] text-gray-400 font-bold uppercase">当前 Token</p>
+                            <p id="menu-token-id" class="text-xs truncate text-gray-700 mt-1"></p>
+                        </div>
+                        <div class="dropdown-item">个人资料</div>
+                        <div class="dropdown-item">外观设置</div>
+                        <div id="logout-btn" class="dropdown-item danger">退出登录</div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <span id="sidebar-account-title" class="truncate pr-2 text-gray-700 font-medium">Loading...</span>
+                    <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2"/></svg>
+                </div>
+                
+                <div class="search-box">
+                    <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2.5"/></svg>
+                    <input type="text" placeholder="快速搜索..." class="bg-transparent border-none outline-none ml-2 text-xs w-full text-gray-600">
+                    <span class="text-[9px] text-gray-400 border border-gray-300 px-1 rounded-sm">Ctrl K</span>
+                </div>
+
+                <div class="sidebar-scroll">
+                    <div class="nav-item active" id="nav-home">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-width="1.8"/></svg>
+                        账户主页
+                    </div>
+                    <div class="group-label">产品</div>
+                    <div class="nav-item" id="nav-workers">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-width="1.8"/></svg>
+                        Workers & Pages
+                    </div>
+                    <div class="nav-item" id="nav-dns">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" stroke-width="1.8"/></svg>
+                        DNS
+                    </div>
+                    <div class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-width="1.8"/></svg>R2 存储</div>
+                    <div class="group-label">管理</div>
+                    <div class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="1.8"/></svg>审计日志</div>
+                    <div class="nav-item"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-width="1.8"/></svg>安全中心</div>
+                </div>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-8 bg-white">
+                <div id="home-view">
+                    <nav class="text-[11px] text-gray-500 mb-1">账户主页 / 域</nav>
+                    <div class="flex items-center mb-6">
+                        <h1 class="text-[28px] font-bold text-gray-900 tracking-tight">站点列表</h1>
+                        <svg class="w-5 h-5 ml-2 text-gray-400 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 5v.01M12 12v.01M12 19v.01" stroke-width="3"/></svg>
+                    </div>
+                    <div class="flex space-x-10 border-b border-gray-200 text-[14px] mb-8">
+                        <div class="pb-3 border-b-2 border-blue-600 text-blue-600 font-semibold cursor-pointer">域</div>
+                        <div class="pb-3 text-gray-500 cursor-default hover:text-gray-800 transition">分析</div>
+                        <div class="pb-3 text-gray-500 cursor-default hover:text-gray-800 transition">Zero Trust</div>
+                    </div>
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex space-x-3">
+                            <button class="bg-[#0051c3] text-white px-4 py-1.5 rounded text-sm font-semibold hover:bg-[#0041a3]">添加站点</button>
+                            <button class="border border-gray-300 text-gray-700 px-4 py-1.5 rounded text-sm font-semibold hover:bg-gray-50">注册域</button>
+                        </div>
+                        <div class="flex border border-gray-300 rounded overflow-hidden shadow-sm">
+                            <div class="flex items-center px-3 bg-white">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2"/></svg>
+                            </div>
+                            <input type="text" placeholder="按域名搜索..." class="py-1.5 px-2 text-sm w-64 outline-none">
+                            <button class="bg-white border-l border-gray-300 px-5 py-1.5 text-blue-600 text-sm font-bold hover:bg-gray-50">搜索</button>
+                        </div>
+                    </div>
+                    <table class="cf-table">
+                        <thead>
+                            <tr class="uppercase">
+                                <th class="w-2/5">域</th>
+                                <th>状态</th>
+                                <th>安全</th>
+                                <th>唯一访问者 (24h)</th>
+                                <th>计划</th>
+                                <th class="w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="domain-list">
+                            <tr><td colspan="6" class="text-center py-24 text-gray-400">正在连接 Cloudflare API...</td></tr>
+                        </tbody>
+                    </table>
+                    <div id="item-count" class="mt-4 text-[13px] font-semibold text-gray-700">0 项</div>
+                </div>
+
+                <div id="workers-view" style="display: none;">
+                    <nav class="text-[11px] text-gray-500 mb-1">Workers 和 Pages</nav>
+                    <div class="flex items-center justify-between mb-6">
+                        <h1 class="text-[28px] font-bold text-gray-900 tracking-tight">Workers 脚本</h1>
+                        <button id="create-worker-btn" class="bg-[#0051c3] text-white px-4 py-1.5 rounded text-sm font-semibold hover:bg-[#0041a3]">创建服务</button>
+                    </div>
+                    <div class="flex space-x-6 border-b border-gray-200 text-sm mb-6">
+                        <div class="pb-2 border-b-2 border-blue-600 text-blue-600 font-medium">Workers</div>
+                        <div class="pb-2 text-gray-500">Pages</div>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                        <table class="cf-table">
+                            <thead>
+                                <tr>
+                                    <th>名称</th>
+                                    <th>状态</th>
+                                    <th>子域</th>
+                                    <th>上次部署</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workers-list">
+                                <tr><td colspan="5" class="text-center py-16 text-gray-400">加载 Workers 中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="workers-count" class="mt-4 text-[13px] font-semibold text-gray-700"></div>
+                </div>
+
+                <div id="dns-view" style="display: none;">
+                    <nav class="text-[11px] text-gray-500 mb-1">DNS / 记录管理</nav>
+                    <div class="flex items-center justify-between mb-6">
+                        <h1 class="text-[28px] font-bold text-gray-900 tracking-tight">DNS 记录</h1>
+                        <div class="flex items-center space-x-3">
+                            <select id="zone-selector" class="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white shadow-sm">
+                                <option value="">选择一个域</option>
+                            </select>
+                            <button id="add-dns-btn" class="bg-[#0051c3] text-white px-4 py-1.5 rounded text-sm font-semibold hover:bg-[#0041a3]">添加记录</button>
+                        </div>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                        <table class="cf-table">
+                            <thead>
+                                <tr class="uppercase">
+                                    <th>类型</th>
+                                    <th>名称</th>
+                                    <th>内容</th>
+                                    <th>TTL</th>
+                                    <th>代理状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dns-records-body">
+                                <tr><td colspan="6" class="text-center py-16 text-gray-400">请先选择一个域</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="dns-count" class="mt-4 text-[13px] font-semibold text-gray-700"></div>
+                </div>
+            </main>
+        </div>
+
+        <footer class="border-t border-gray-100 py-6 text-center text-xs text-gray-400 bg-white">
+            <div class="flex justify-center space-x-4 mb-2">
+                <span class="hover:underline cursor-pointer">支持</span>
+                <span>|</span>
+                <span class="hover:underline cursor-pointer">系统状态</span>
+                <span>|</span>
+                <span class="hover:underline cursor-pointer">隐私政策</span>
+            </div>
+            <p>© 2026 Cloudflare, Inc.</p>
+        </footer>
+
+        <!-- DNS 模态框 -->
+        <div id="dns-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-title">添加 DNS 记录</h3>
+                    <span class="close-modal">&times;</span>
+                </div>
+                <form id="dns-form">
+                    <input type="hidden" id="record-id">
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">类型</label>
+                        <select id="record-type" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                            <option value="A">A</option>
+                            <option value="AAAA">AAAA</option>
+                            <option value="CNAME">CNAME</option>
+                            <option value="MX">MX</option>
+                            <option value="TXT">TXT</option>
+                            <option value="NS">NS</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">名称</label>
+                        <input type="text" id="record-name" placeholder="例如: www 或 @" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">内容</label>
+                        <input type="text" id="record-content" placeholder="IPv4 地址 / 目标" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">TTL (秒)</label>
+                        <select id="record-ttl" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                            <option value="1">自动</option>
+                            <option value="120">2 分钟</option>
+                            <option value="300">5 分钟</option>
+                            <option value="600">10 分钟</option>
+                            <option value="1800">30 分钟</option>
+                            <option value="3600">1 小时</option>
+                            <option value="7200">2 小时</option>
+                            <option value="86400">24 小时</option>
+                        </select>
+                    </div>
+                    <div class="mb-6 proxy-toggle">
+                        <span class="text-sm font-medium">代理状态</span>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="record-proxied" class="toggle-checkbox hidden">
+                            <div class="w-10 h-5 bg-gray-300 rounded-full relative transition">
+                                <div class="dot absolute w-4 h-4 bg-white rounded-full top-0.5 left-0.5 transition-all"></div>
+                            </div>
+                            <span id="proxy-label" class="ml-2 text-sm text-gray-700">仅 DNS</span>
+                        </label>
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button type="button" class="border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-50 close-modal">取消</button>
+                        <button type="submit" class="bg-[#0051c3] text-white px-4 py-2 rounded text-sm hover:bg-[#0041a3]">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ---------- 全局状态 ----------
+            let token = localStorage.getItem('cf_token');
+            const loginView = document.getElementById('login-view');
+            const consoleView = document.getElementById('console-view');
+            let consoleInitialized = false; // 控制台事件是否已初始化
+
+            // ---------- 视图切换 ----------
+            function showLogin() {
+                loginView.style.display = 'flex';
+                consoleView.classList.add('hidden');
+                // 重置登录状态
+                resetLogin();
+            }
+
+            function showConsole() {
+                loginView.style.display = 'none';
+                consoleView.classList.remove('hidden');
+                if (!consoleInitialized) {
+                    initConsoleEvents();
+                    consoleInitialized = true;
+                }
+                loadConsoleData(); // 加载控制台数据
+            }
+
+            // 初始视图选择
+            if (token) {
+                showConsole();
+            } else {
+                showLogin();
+            }
+
+            // ---------- 登录页面逻辑 ----------
+            function resetLogin() {
+                const captchaBox = document.getElementById('captchaBox');
+                const spinner = document.getElementById('spinner');
+                const captchaText = document.getElementById('captchaText');
+                const loginBtn = document.getElementById('loginBtn');
+                const tokenInput = document.getElementById('apiToken');
+
+                // 清除可能存在的方形和计时器
+                if (window.captchaTimer) clearTimeout(window.captchaTimer);
+                const square = document.getElementById('loginCaptchaSquare');
+                if (square) square.remove();
+                spinner.style.display = 'block';
+                captchaText.textContent = '正在验证...';
+                captchaText.className = '';
+                loginBtn.disabled = true;
+                loginBtn.classList.remove('enabled');
+                tokenInput.value = '';
+
+                // 重新开始验证
+                startCaptcha();
+            }
+
+            function startCaptcha() {
+                const captchaBox = document.getElementById('captchaBox');
+                const spinner = document.getElementById('spinner');
+                const captchaText = document.getElementById('captchaText');
+                const loginBtn = document.getElementById('loginBtn');
+
+                // 清除旧计时器
+                if (window.captchaTimer) clearTimeout(window.captchaTimer);
+
+                // 2-5秒后显示“点击验证”
+                window.captchaTimer = setTimeout(() => {
+                    spinner.style.display = 'none';
+                    const square = document.createElement('div');
+                    square.className = 'login-captcha-square';
+                    square.id = 'loginCaptchaSquare';
+                    captchaBox.querySelector('.login-captcha-left').insertBefore(square, captchaText);
+                    captchaText.textContent = '点击验证';
+                    captchaText.className = '';
+
+                    // 绑定点击通过事件
+                    captchaBox.onclick = function() {
+                        const existingSquare = document.getElementById('loginCaptchaSquare');
+                        if (!existingSquare) return;
+                        const checkmark = document.createElement('div');
+                        checkmark.className = 'login-checkmark';
+                        existingSquare.appendChild(checkmark);
+                        captchaText.textContent = '验证通过';
+                        captchaText.className = 'login-captcha-passed';
+                        // 启用登录按钮
+                        loginBtn.disabled = false;
+                        loginBtn.classList.add('enabled');
+                        // 移除点击事件，避免重复
+                        captchaBox.onclick = null;
+                    };
+                }, 2000 + Math.random() * 3000);
+            }
+
+            // 初始化登录页事件
+            (function initLogin() {
+                const captchaBox = document.getElementById('captchaBox');
+                const eyeIcon = document.getElementById('toggleTokenEye');
+                const tokenInput = document.getElementById('apiToken');
+                const loginBtn = document.getElementById('loginBtn');
+
+                // 眼睛图标切换密码可见
+                eyeIcon.addEventListener('click', function() {
+                    const type = tokenInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                    tokenInput.setAttribute('type', type);
+                });
+
+                // 登录按钮点击
+                loginBtn.addEventListener('click', function() {
+                    const tokenVal = tokenInput.value.trim();
+                    if (!tokenVal) {
+                        alert('请输入 API 令牌');
+                        return;
+                    }
+                    if (!/^[A-Za-z0-9_-]{20,}$/.test(tokenVal)) {
+                        alert('令牌格式不正确。有效的令牌应至少20位，且仅包含字母、数字、下划线或短横线。');
+                        return;
+                    }
+                    localStorage.setItem('cf_token', tokenVal);
+                    token = tokenVal; // 更新全局 token
+                    showConsole(); // 直接显示控制台，不刷新页面
+                });
+
+                // 如果验证区域在加载中被点击，不处理（由定时器后的 onclick 处理）
+                captchaBox.addEventListener('click', function(e) {
+                    // 如果还在 spinner 状态，忽略
+                    if (document.getElementById('spinner').style.display !== 'none') return;
+                });
+
+                // 启动验证流程
+                startCaptcha();
+            })();
+
+            // ---------- 控制台初始化 ----------
+            function initConsoleEvents() {
+                // 导航点击
+                const navHome = document.getElementById('nav-home');
+                const navWorkers = document.getElementById('nav-workers');
+                const navDns = document.getElementById('nav-dns');
+                const homeView = document.getElementById('home-view');
+                const workersView = document.getElementById('workers-view');
+                const dnsView = document.getElementById('dns-view');
+
+                navHome.addEventListener('click', () => switchView('home'));
+                navWorkers.addEventListener('click', () => switchView('workers'));
+                navDns.addEventListener('click', () => switchView('dns'));
+
+                function switchView(view) {
+                    [navHome, navWorkers, navDns].forEach(el => el.classList.remove('active'));
+                    homeView.style.display = 'none';
+                    workersView.style.display = 'none';
+                    dnsView.style.display = 'none';
+                    if (view === 'home') {
+                        homeView.style.display = 'block';
+                        navHome.classList.add('active');
+                        loadZones();
+                    } else if (view === 'workers') {
+                        workersView.style.display = 'block';
+                        navWorkers.classList.add('active');
+                        loadWorkers();
+                    } else if (view === 'dns') {
+                        dnsView.style.display = 'block';
+                        navDns.classList.add('active');
+                        fetchZonesForSelector();
+                    }
+                }
+
+                // 用户菜单
+                const userBtn = document.getElementById('user-btn');
+                const userMenu = document.getElementById('user-dropdown');
+                userBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+                };
+                document.getElementById('logout-btn').onclick = () => {
+                    if(confirm("确定退出并清除本地 API 令牌吗？")) {
+                        localStorage.removeItem('cf_token');
+                        token = null;
+                        showLogin(); // 返回登录页
+                    }
+                };
+                window.onclick = () => {
+                    userMenu.style.display = 'none';
+                };
+
+                // DNS 模态框
+                const modal = document.getElementById('dns-modal');
+                const closeModalButtons = document.querySelectorAll('.close-modal');
+                const dnsForm = document.getElementById('dns-form');
+                const addDnsBtn = document.getElementById('add-dns-btn');
+                const recordProxied = document.getElementById('record-proxied');
+                const proxyLabel = document.getElementById('proxy-label');
+
+                recordProxied.addEventListener('change', function() {
+                    proxyLabel.innerText = this.checked ? '已代理' : '仅 DNS';
+                });
+
+                closeModalButtons.forEach(btn => btn.addEventListener('click', () => modal.classList.remove('active')));
+                window.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
+
+                addDnsBtn.addEventListener('click', () => {
+                    if (!window.currentZoneId) { alert('请先选择一个域'); return; }
+                    openModal('add');
+                });
+
+                dnsForm.addEventListener('submit', handleDnsFormSubmit);
+
+                const zoneSelector = document.getElementById('zone-selector');
+                zoneSelector.addEventListener('change', (e) => {
+                    window.currentZoneId = e.target.value;
+                    if (window.currentZoneId) {
+                        loadDnsRecords(window.currentZoneId);
+                    } else {
+                        document.getElementById('dns-records-body').innerHTML = '<tr><td colspan="6" class="text-center py-16 text-gray-400">请选择一个域</td></tr>';
+                        document.getElementById('dns-count').innerText = '';
+                    }
+                });
+
+                document.getElementById('create-worker-btn').addEventListener('click', () => {
+                    alert('创建Worker功能需要通过API实现，请参考Cloudflare Workers API文档。');
+                });
+
+                // 全局变量
+                window.zones = [];
+                window.dnsRecords = [];
+
+                // 定义全局函数
+                window.openModal = function(action, record = null) {
+                    const modalTitle = document.getElementById('modal-title');
+                    const recordId = document.getElementById('record-id');
+                    const recordType = document.getElementById('record-type');
+                    const recordName = document.getElementById('record-name');
+                    const recordContent = document.getElementById('record-content');
+                    const recordTtl = document.getElementById('record-ttl');
+                    const recordProxied = document.getElementById('record-proxied');
+                    const proxyLabel = document.getElementById('proxy-label');
+
+                    modalTitle.innerText = action === 'add' ? '添加 DNS 记录' : '编辑 DNS 记录';
+                    if (action === 'add') {
+                        recordId.value = '';
+                        recordType.value = 'A';
+                        recordName.value = '';
+                        recordContent.value = '';
+                        recordTtl.value = '1';
+                        recordProxied.checked = false;
+                        proxyLabel.innerText = '仅 DNS';
+                    } else if (record) {
+                        recordId.value = record.id;
+                        recordType.value = record.type;
+                        recordName.value = record.name;
+                        recordContent.value = record.content;
+                        recordTtl.value = record.ttl;
+                        recordProxied.checked = record.proxied;
+                        proxyLabel.innerText = record.proxied ? '已代理' : '仅 DNS';
+                    }
+                    document.getElementById('dns-modal').classList.add('active');
+                };
+
+                window.deleteDnsRecord = async function(recordId) {
+                    try {
+                        const res = await fetch(`/api/zones/${window.currentZoneId}/dns_records/${recordId}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        const data = await res.json();
+                        if (!data.success) throw new Error(data.errors[0].message);
+                        loadDnsRecords(window.currentZoneId);
+                    } catch (err) {
+                        alert('删除失败: ' + err.message);
+                    }
+                };
+
+                async function handleDnsFormSubmit(e) {
+                    e.preventDefault();
+                    if (!window.currentZoneId) { alert('请先选择域'); return; }
+
+                    const payload = {
+                        type: document.getElementById('record-type').value,
+                        name: document.getElementById('record-name').value,
+                        content: document.getElementById('record-content').value,
+                        ttl: parseInt(document.getElementById('record-ttl').value),
+                        proxied: document.getElementById('record-proxied').checked
+                    };
+
+                    const id = document.getElementById('record-id').value;
+                    let url = `/api/zones/${window.currentZoneId}/dns_records`;
+                    let method = 'POST';
+                    if (id) {
+                        url += `/${id}`;
+                        method = 'PUT';
+                    }
+
+                    try {
+                        const res = await fetch(url, {
+                            method: method,
+                            headers: {
+                                'Authorization': 'Bearer ' + token,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        if (!data.success) throw new Error(data.errors[0].message);
+                        document.getElementById('dns-modal').classList.remove('active');
+                        loadDnsRecords(window.currentZoneId);
+                    } catch (err) {
+                        alert('操作失败: ' + err.message);
+                    }
+                }
+            }
+
+            // ---------- 控制台数据加载函数 ----------
+            async function loadConsoleData() {
+                if (!token) return;
+                document.getElementById('header-token-mask').innerText = "令牌: " + token.substring(0,6) + "..." + token.substring(token.length-4);
+                document.getElementById('sidebar-account-title').innerText = "Token: " + token.substring(0,6) + "...";
+                document.getElementById('menu-token-id').innerText = token;
+                await loadZones();
+                fetchZonesForSelector();
+            }
+
+            async function loadZones() {
+                const list = document.getElementById('domain-list');
+                try {
+                    const res = await fetch('/api/zones', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (res.status === 401) throw new Error("令牌无效或已过期");
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.errors[0].message);
+                    list.innerHTML = '';
+                    document.getElementById('item-count').innerText = (data.result ? data.result.length : 0) + " 项";
+                    if (!data.result || data.result.length === 0) {
+                        list.innerHTML = '<tr><td colspan="6" class="text-center py-20 text-gray-500">未找到域名，请检查 Token 权限</td></tr>';
+                        return;
+                    }
+                    data.result.forEach(zone => {
+                        const tr = document.createElement('tr');
+                        const sparkPath = `M0 ${10+Math.random()*5} Q 20 ${Math.random()*15}, 40 ${10+Math.random()*5} T 80 ${10+Math.random()*5}`;
+                        tr.innerHTML = `
+                            <td><span class="text-blue-600 font-semibold hover:underline cursor-pointer">${zone.name}</span></td>
+                            <td><div class="flex items-center text-green-600 text-xs font-medium uppercase"><span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>${zone.status === 'active' ? '活动' : zone.status}</div></td>
+                            <td class="text-blue-600 text-xs cursor-pointer">检查见解</td>
+                            <td><div class="flex items-center"><svg class="sparkline mr-2"><path d="${sparkPath}"/></svg><span class="text-gray-600">${(Math.random()*2).toFixed(1)}k</span></div></td>
+                            <td class="text-xs text-gray-500">${zone.plan?.name || 'Free'}</td>
+                            <td class="text-right text-gray-400"><svg class="w-5 h-5 cursor-pointer inline" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></td>
+                        `;
+                        list.appendChild(tr);
+                    });
+                } catch (err) {
+                    list.innerHTML = `<tr><td colspan="6" class="text-center py-20 text-red-500 font-medium">错误: ${err.message}</td></tr>`;
+                }
+            }
+
+            async function fetchZonesForSelector() {
+                try {
+                    const res = await fetch('/api/zones', { headers: { 'Authorization': 'Bearer ' + token } });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.zones = data.result || [];
+                        const selector = document.getElementById('zone-selector');
+                        selector.innerHTML = '<option value="">选择一个域</option>';
+                        window.zones.forEach(z => {
+                            const option = document.createElement('option');
+                            option.value = z.id;
+                            option.textContent = z.name;
+                            selector.appendChild(option);
+                        });
+                        if (window.currentZoneId) {
+                            selector.value = window.currentZoneId;
+                            loadDnsRecords(window.currentZoneId);
+                        }
+                    }
+                } catch (e) { console.error('加载zone列表失败', e); }
+            }
+
+            async function loadDnsRecords(zoneId) {
+                const body = document.getElementById('dns-records-body');
+                body.innerHTML = '<tr><td colspan="6" class="text-center py-16 text-gray-400">加载中...</td></tr>';
+                try {
+                    const res = await fetch(`/api/zones/${zoneId}/dns_records`, { headers: { 'Authorization': 'Bearer ' + token } });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.errors[0].message);
+                    window.dnsRecords = data.result || [];
+                    renderDnsTable();
+                } catch (err) {
+                    body.innerHTML = `<tr><td colspan="6" class="text-center py-16 text-red-500">错误: ${err.message}</td></tr>`;
+                }
+            }
+
+            function renderDnsTable() {
+                const body = document.getElementById('dns-records-body');
+                const count = document.getElementById('dns-count');
+                if (window.dnsRecords.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" class="text-center py-16 text-gray-500">该域暂无DNS记录</td></tr>';
+                    count.innerText = '0 项';
+                    return;
+                }
+                let html = '';
+                window.dnsRecords.forEach(rec => {
+                    const proxied = rec.proxied ? '<span class="badge-proxy">已代理</span>' : '<span class="badge-dns">仅DNS</span>';
+                    const ttl = rec.ttl === 1 ? '自动' : rec.ttl + '秒';
+                    html += `<tr>
+                        <td><span class="font-mono text-xs bg-gray-100 px-2 py-1 rounded">${rec.type}</span></td>
+                        <td>${rec.name}</td>
+                        <td class="max-w-xs truncate">${rec.content}</td>
+                        <td>${ttl}</td>
+                        <td>${proxied}</td>
+                        <td>
+                            <button class="edit-dns text-blue-600 hover:text-blue-800 mr-2" data-id="${rec.id}" data-type="${rec.type}" data-name="${rec.name}" data-content="${rec.content}" data-ttl="${rec.ttl}" data-proxied="${rec.proxied}">编辑</button>
+                            <button class="delete-dns text-red-600 hover:text-red-800" data-id="${rec.id}">删除</button>
+                        </td>
+                    </tr>`;
+                });
+                body.innerHTML = html;
+                count.innerText = window.dnsRecords.length + ' 项';
+
+                document.querySelectorAll('.edit-dns').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const dataset = e.currentTarget.dataset;
+                        openModal('edit', {
+                            id: dataset.id,
+                            type: dataset.type,
+                            name: dataset.name,
+                            content: dataset.content,
+                            ttl: parseInt(dataset.ttl),
+                            proxied: dataset.proxied === 'true'
+                        });
+                    });
+                });
+                document.querySelectorAll('.delete-dns').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const id = e.currentTarget.dataset.id;
+                        if (confirm('确定删除此DNS记录吗？')) {
+                            await deleteDnsRecord(id);
+                        }
+                    });
+                });
+            }
+
+            async function loadWorkers() {
+                const list = document.getElementById('workers-list');
+                const count = document.getElementById('workers-count');
+                list.innerHTML = '<tr><td colspan="5" class="text-center py-16 text-gray-400">加载 Workers 中...</td></tr>';
+                try {
+                    const accountsRes = await fetch('/api/accounts', { headers: { 'Authorization': 'Bearer ' + token } });
+                    const accountsData = await accountsRes.json();
+                    if (!accountsData.success) throw new Error(accountsData.errors[0].message);
+                    if (accountsData.result.length === 0) throw new Error('未找到账户');
+                    const accountId = accountsData.result[0].id;
+
+                    const workersRes = await fetch(`/api/accounts/${accountId}/workers/scripts`, { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (workersRes.status === 404) {
+                        list.innerHTML = '<tr><td colspan="5" class="text-center py-16 text-gray-500">当前账户未启用 Workers 或权限不足</td></tr>';
+                        count.innerText = '0 项';
+                        return;
+                    }
+                    const workersData = await workersRes.json();
+                    if (!workersData.success) throw new Error(workersData.errors[0].message);
+                    const scripts = workersData.result || [];
+                    if (scripts.length === 0) {
+                        list.innerHTML = '<tr><td colspan="5" class="text-center py-16 text-gray-500">暂无 Worker 脚本</td></tr>';
+                        count.innerText = '0 项';
+                        return;
+                    }
+                    let html = '';
+                    scripts.forEach(script => {
+                        const subdomain = script.script ? (script.script + '.workers.dev') : '未分配';
+                        html += `<tr>
+                            <td class="font-medium">${script.id || script.name}</td>
+                            <td><span class="badge-worker">已部署</span></td>
+                            <td>${subdomain}</td>
+                            <td>${script.last_deployed ? new Date(script.last_deployed).toLocaleString() : '未知'}</td>
+                            <td><button class="text-blue-600 hover:text-blue-800 mr-2">查看</button><button class="text-red-600 hover:text-red-800">删除</button></td>
+                        </tr>`;
+                    });
+                    list.innerHTML = html;
+                    count.innerText = scripts.length + ' 项';
+                } catch (err) {
+                    list.innerHTML = `<tr><td colspan="5" class="text-center py-16 text-red-500">错误: ${err.message}</td></tr>`;
+                    count.innerText = '';
+                }
+            }
+        })();
+    </script>
+</body>
+</html>
